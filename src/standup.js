@@ -3,6 +3,7 @@
 // and storing responses in memory for later digest generation.
 
 const { buildStandupForm } = require('../views/standupForm');
+const digest = require('./digest');
 
 // In-memory store for standup responses
 // Each response: { userId, userName, yesterday, today, blockers, submittedAt }
@@ -191,6 +192,14 @@ function setupHandlers(app) {
         today,
         blockers,
       });
+
+      // Generate and post the digest to #standup-digest
+      console.log('📊 Triggering digest generation...');
+      try {
+        await digest.generateAndPost(app, getResponses());
+      } catch (digestError) {
+        console.error('Failed to post digest:', digestError.message);
+      }
     } catch (error) {
       console.error('Error handling standup submission:', error.message);
     }

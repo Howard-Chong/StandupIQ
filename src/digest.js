@@ -244,6 +244,12 @@ async function findDigestChannel(client) {
       limit: 200,
     });
 
+    console.log(`🔍 findDigestChannel: bot sees ${result.channels?.length || 0} channels`);
+    if (result.channels?.length > 0) {
+      const channelNames = result.channels.map(c => `#${c.name} (${c.id})`).join(', ');
+      console.log(`📋 Channels found: ${channelNames}`);
+    }
+
     const digestChannel = result.channels?.find(
       (ch) => ch.name === 'standup-digest' || ch.name_normalized === 'standup-digest'
     );
@@ -253,7 +259,7 @@ async function findDigestChannel(client) {
       return digestChannel.id;
     }
 
-    console.warn('⚠️  #standup-digest channel not found — create it in Slack');
+    console.warn('⚠️  #standup-digest channel not found — create it in Slack and invite the bot');
     return null;
   } catch (error) {
     console.error('Error finding digest channel:', error.message);
@@ -273,6 +279,8 @@ async function findDigestChannel(client) {
  */
 async function generateAndPost(app, responses, rtsFindings = []) {
   try {
+    console.log(`📊 generateAndPost called — ${responses.length} response(s), ${rtsFindings.length} RTS finding(s)`);
+
     if (responses.length === 0) {
       console.log('📊 No responses to generate digest from');
       return null;
@@ -280,7 +288,9 @@ async function generateAndPost(app, responses, rtsFindings = []) {
 
     console.log(`📊 Generating digest from ${responses.length} response(s)...`);
     const digestData = buildDigestData(responses, rtsFindings);
+    console.log('📊 Digest data built, posting...');
     const result = await postDigest(app, digestData);
+    console.log('📊 postDigest result:', result ? `posted (ts: ${result.ts})` : 'FAILED');
 
     return result;
   } catch (error) {
