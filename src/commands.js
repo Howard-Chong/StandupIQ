@@ -218,9 +218,10 @@ function setupHandlers(app, getResponses) {
    * immediately without needing a button click first.
    */
   app.command('/standup', async ({ ack, command, client }) => {
+    console.log('✅ /standup command received');
+
     // Acknowledge immediately — Slack requires this within 3 seconds
     await ack();
-    console.log(`📥 /standup command received:`, JSON.stringify(command, null, 2));
 
     try {
       const modal = buildStandupForm();
