@@ -8,36 +8,42 @@ const cron = require('node-cron');
 let task = null;
 
 /**
- * Callback fired by the cron scheduler at 9:00 AM daily.
- * This is where the standup form will be sent to team members via DM.
- * For now it logs the trigger — actual DM logic comes in Milestone 4.
+ * Builds the cron callback that fires at 9:00 AM daily.
+ * Wraps the provided callback with error handling and logging.
+ *
+ * @param {Function} [onTrigger] — Optional callback to run at 9:00 AM
+ * @returns {Function} Async function suitable for node-cron
  */
-async function dailyStandupTrigger() {
-  try {
-    const timestamp = new Date().toISOString();
-    console.log(`⏰ Standup trigger fired at ${timestamp}`);
+function buildTrigger(onTrigger) {
+  return async function dailyStandupTrigger() {
+    try {
+      const timestamp = new Date().toISOString();
+      console.log(`⏰ Standup trigger fired at ${timestamp}`);
 
-    // TODO (Milestone 4): Send Block Kit form to each team member via DM
-    // TODO (Milestone 4): Collect and store standup responses
-  } catch (error) {
-    console.error('Failed to run daily standup trigger:', error.message);
-  }
+      if (onTrigger) {
+        await onTrigger();
+      }
+    } catch (error) {
+      console.error('Failed to run daily standup trigger:', error.message);
+    }
+  };
 }
 
 /**
  * Starts the daily standup cron scheduler.
  * Schedules the trigger for 9:00 AM server time every day.
  *
+ * @param {Function} [onTrigger] — Optional callback to run at 9:00 AM
  * @returns {Object} The scheduled cron task
  */
-function start() {
+function start(onTrigger) {
   if (task) {
     console.log('Scheduler is already running');
     return task;
   }
 
   // Schedule for 9:00 AM daily (server local time by default)
-  task = cron.schedule('0 9 * * *', dailyStandupTrigger);
+  task = cron.schedule('0 9 * * *', buildTrigger(onTrigger));
 
   console.log('📅 Standup scheduler started — will trigger at 9:00 AM daily');
   return task;
