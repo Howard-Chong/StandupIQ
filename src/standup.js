@@ -1,25 +1,21 @@
 // src/standup.js — Standup response collection and storage
 // Handles sending the standup form to users, collecting submissions,
-// and storing responses in memory for later digest generation.
+// and storing responses via file-based persistence (src/store.js).
 
 const { buildStandupForm } = require('../views/standupForm');
 const digest = require('./digest');
+const store = require('./store');
 
-// In-memory store for standup responses
+// Delegate storage to store.js (JSON file persistence)
 // Each response: { userId, userName, yesterday, today, blockers, submittedAt }
-const responses = [];
 
 /**
- * Stores a standup response in memory.
+ * Stores a standup response using file-based persistence.
  *
  * @param {Object} entry — { userId, userName, yesterday, today, blockers }
  */
 function storeResponse(entry) {
-  responses.push({
-    ...entry,
-    submittedAt: new Date().toISOString(),
-  });
-  console.log(`📥 Standup response stored from <@${entry.userId}>`);
+  store.storeResponse(entry);
 }
 
 /**
@@ -28,15 +24,14 @@ function storeResponse(entry) {
  * @returns {Array} Array of stored responses
  */
 function getResponses() {
-  return [...responses].reverse();
+  return store.getResponses();
 }
 
 /**
  * Clears all stored responses. Useful for testing or daily reset.
  */
 function clearResponses() {
-  responses.length = 0;
-  console.log('🧹 Standup responses cleared');
+  store.clearResponses();
 }
 
 /**

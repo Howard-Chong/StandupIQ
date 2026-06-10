@@ -142,5 +142,8 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# StandupIQ response data
+data/
+
 #claude md
 claude.md
