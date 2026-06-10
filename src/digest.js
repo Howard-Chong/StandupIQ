@@ -4,7 +4,21 @@
 // with color-coded Block Kit formatting.
 
 /**
- * Determines the team health status based on blocker count across all responses.
+ * Checks whether a blocker value represents a real blocker.
+ * Filters out empty, whitespace-only, and common "no blocker" phrases.
+ *
+ * @param {string} blockers — The blockers field from a standup response
+ * @returns {boolean} True if the blocker is real
+ */
+function hasRealBlocker(blockers) {
+  if (!blockers || !blockers.trim()) return false;
+  const normalized = blockers.trim().toLowerCase();
+  const falseBlockers = ['no', 'none', 'n/a', 'na', 'none.', 'nope', 'nil', '-'];
+  return !falseBlockers.includes(normalized);
+}
+
+/**
+ * Determines the team health status based on real blocker count.
  * Green: no blockers, Yellow: 1-2 blockers, Red: 3+ blockers.
  *
  * @param {Object[]} responses — Standup responses
@@ -12,7 +26,7 @@
  */
 function getTeamStatus(responses) {
   const blockerCount = responses.filter(
-    (r) => r.blockers && r.blockers.trim()
+    (r) => hasRealBlocker(r.blockers)
   ).length;
 
   if (blockerCount === 0) {
@@ -25,44 +39,38 @@ function getTeamStatus(responses) {
 }
 
 /**
- * Generates a natural language summary from standup responses.
- * Combines individual updates into a coherent team-wide summary.
- * Designed to be enhanced with an AI API call in the future.
+ * Generates a short natural language summary (max 2-3 sentences).
  *
  * @param {Object[]} responses — Standup responses
- * @returns {string} Natural language team summary
+ * @returns {string} Natural language team summary (2-3 sentences)
  */
 function generateSummary(responses) {
   if (responses.length === 0) {
-    return 'No standup responses were submitted today.';
+    return 'No standup responses were submitted.';
   }
 
-  const status = getTeamStatus(responses);
+  const realBlockers = responses.filter((r) => hasRealBlocker(r.blockers));
+
+  // Sentence 1: Who submitted and overall state
   const names = responses.map((r) => `<@${r.userId}>`).join(', ');
-  const blockers = responses.filter((r) => r.blockers && r.blockers.trim());
+  let summary = `${responses.length} update(s) from ${names}. `;
 
-  // Build a structured summary from the responses
-  let summary = `Today, ${responses.length} team member(s) submitted standup updates: ${names}. `;
+  // Sentence 2: Work focus
+  const tasks = responses
+    .map((r) => r.today?.trim())
+    .filter((t) => t)
+    .slice(0, 3); // just top 3 focus areas
 
-  // Summarize what the team is working on
-  const todayTasks = responses
-    .map((r) => r.today)
-    .filter((t) => t && t.trim())
-    .map((t) => t.trim().replace(/\n/g, '; '));
-
-  if (todayTasks.length > 0) {
-    summary += `The team is focused on: ${todayTasks.join(' | ')}. `;
+  if (tasks.length > 0) {
+    summary += `Focus areas: ${tasks.join('; ')}. `;
   }
 
-  // Summarize blockers
-  if (blockers.length > 0) {
-    const blockerDetails = blockers.map(
-      (b) => `<@${b.userId}> reported: "${b.blockers}"`
-    );
-    summary += `${blockers.length} blocker(s) were reported: ${blockerDetails.join('; ')}.`;
+  // Sentence 3: Blocker callout (only if any)
+  if (realBlockers.length > 0) {
+    summary += `${realBlockers.length} blocker(s) need attention.`;
+  } else {
+    summary += 'No blockers reported.';
   }
-
-  summary += ` Overall team status: ${status.emoji} ${status.label}.`;
 
   return summary;
 }
@@ -148,7 +156,7 @@ async function postDigest(app, digestData, channelId) {
       });
 
       for (const r of responses) {
-        const blockerText = r.blockers?.trim()
+        const blockerText = hasRealBlocker(r.blockers)
           ? `\n>🛑 *Blocker:* ${r.blockers}`
           : '';
 
@@ -299,4 +307,4 @@ async function generateAndPost(app, responses, rtsFindings = []) {
   }
 }
 
-module.exports = { buildDigestData, postDigest, generateAndPost, generateSummary, getTeamStatus };
+module.exports = { buildDigestData, postDigest, generateAndPost, generateSummary, getTeamStatus, hasRealBlocker };

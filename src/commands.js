@@ -2,12 +2,12 @@
 // Registers /standup (opens the Block Kit form modal) and /standup-report
 // (weekly summary with blocker trends and team health score).
 
-const { getTeamStatus, generateSummary } = require('./digest');
+const { getTeamStatus, generateSummary, hasRealBlocker } = require('./digest');
 const { buildStandupForm } = require('../views/standupForm');
 
 /**
  * Calculates team health score as a percentage of responses without blockers.
- * Returns a score from 0–100 where 100 means no blockers reported.
+ * Uses hasRealBlocker to treat "no", "none", "n/a" as no blocker.
  *
  * @param {Object[]} responses — Standup responses
  * @returns {number} Health score percentage
@@ -16,68 +16,55 @@ function calculateHealthScore(responses) {
   if (responses.length === 0) return 0;
 
   const withoutBlockers = responses.filter(
-    (r) => !r.blockers || !r.blockers.trim()
+    (r) => !hasRealBlocker(r.blockers)
   ).length;
 
   return Math.round((withoutBlockers / responses.length) * 100);
 }
 
 /**
- * Returns a health label and emoji for a given score.
+ * Returns the health emoji for a given score.
  *
  * @param {number} score — Health score (0–100)
- * @returns {{ emoji: string, label: string }}
+ * @returns {string} Emoji character
  */
-function healthLabel(score) {
-  if (score >= 80) return { emoji: '💚', label: 'Great' };
-  if (score >= 50) return { emoji: '💛', label: 'Fair' };
-  return { emoji: '❤️', label: 'Needs Attention' };
+function healthEmoji(score) {
+  if (score >= 80) return '💚';
+  if (score >= 50) return '💛';
+  return '❤️';
 }
 
 /**
- * Builds per-user stats from the response history.
- * Counts submissions and blocker frequency per user.
+ * Deduplicates responses to show only the latest entry per user.
+ * Assumes responses are ordered newest-first (from getResponses).
  *
- * @param {Object[]} responses — All standup responses
- * @returns {Object[]} Array of { userId, userName, total, withBlockers, withoutBlockers }
+ * @param {Object[]} responses — Standup responses
+ * @returns {Object[]} One entry per user (latest only)
  */
-function buildUserStats(responses) {
-  const userMap = {};
-
-  for (const r of responses) {
-    if (!userMap[r.userId]) {
-      userMap[r.userId] = {
-        userId: r.userId,
-        userName: r.userName,
-        total: 0,
-        withBlockers: 0,
-        withoutBlockers: 0,
-      };
-    }
-    userMap[r.userId].total += 1;
-    if (r.blockers && r.blockers.trim()) {
-      userMap[r.userId].withBlockers += 1;
-    } else {
-      userMap[r.userId].withoutBlockers += 1;
-    }
-  }
-
-  return Object.values(userMap);
+function getLatestPerUser(responses) {
+  const seen = new Set();
+  return responses.filter((r) => {
+    if (seen.has(r.userId)) return false;
+    seen.add(r.userId);
+    return true;
+  });
 }
 
 /**
  * Builds the Block Kit message payload for the standup report.
- * Shows team health, individual stats, recent updates, and summary.
+ * Clean layout: header, team health line, recent update cards, short summary.
  *
  * @param {Object[]} responses — Standup responses to report on
  * @returns {Object} Block Kit message payload
  */
 function buildReportBlocks(responses) {
-  const score = calculateHealthScore(responses);
-  const health = healthLabel(score);
-  const status = getTeamStatus(responses);
-  const userStats = buildUserStats(responses);
-  const summary = generateSummary(responses);
+  // Deduplicate: show only latest entry per user
+  const latest = getLatestPerUser(responses);
+  const score = calculateHealthScore(latest);
+  const emoji = healthEmoji(score);
+  const blockerCount = latest.filter((r) => hasRealBlocker(r.blockers)).length;
+  const clearCount = latest.length - blockerCount;
+  const summary = generateSummary(latest);
 
   const dateLabel = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -92,7 +79,7 @@ function buildReportBlocks(responses) {
       type: 'header',
       text: {
         type: 'plain_text',
-        text: '📋 Standup Report',
+        text: '📊 Standup Report',
         emoji: true,
       },
     },
@@ -101,85 +88,55 @@ function buildReportBlocks(responses) {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Report generated:* ${dateLabel}\n*Period:* Last ${responses.length} standup(s) on record`,
+        text: `*Generated:* ${dateLabel}`,
       },
     },
     { type: 'divider' },
-    // Team Health Score
+    // Team Health — one clean line
     {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*${health.emoji} Team Health Score: ${score}% — ${health.label}*`,
-      },
-    },
-    // Blocker Summary
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*Status:* ${status.emoji} ${status.label}\n*Total Updates:* ${responses.length}\n*With Blockers:* ${responses.filter((r) => r.blockers && r.blockers.trim()).length}\n*Without Blockers:* ${responses.filter((r) => !r.blockers || !r.blockers.trim()).length}`,
+        text: `${emoji} *${score}% Health Score* | ${latest.length} Updates | ${blockerCount} Blockers | ${clearCount} Clear`,
       },
     },
     { type: 'divider' },
-    // Per-User Stats
+    // Recent Updates — clean cards
     {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*👤 Individual Stats*',
+        text: '*📝 Recent Updates*',
       },
     },
   ];
 
-  // Per-user breakdown
-  for (const stat of userStats) {
-    const userScore = Math.round((stat.withoutBlockers / stat.total) * 100);
-    const userEmoji = userScore >= 80 ? '💚' : userScore >= 50 ? '💛' : '❤️';
-
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `<@${stat.userId}>\n>📥 ${stat.total} submission(s) | ${userEmoji} ${userScore}% blocker-free | 🛑 ${stat.withBlockers} blocker(s)`,
-      },
-    });
-  }
-
-  blocks.push({ type: 'divider' });
-
-  // Recent Updates
-  blocks.push({
-    type: 'section',
-    text: {
-      type: 'mrkdwn',
-      text: '*📝 Recent Updates*',
-    },
-  });
-
-  // Show the 5 most recent responses
-  const recent = responses.slice(-5);
-  for (const r of recent) {
+  // Show up to 5 most recent, one card per person
+  for (const r of latest.slice(0, 5)) {
     const submittedDate = new Date(r.submittedAt).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
     });
-    const blockerLine = r.blockers?.trim()
-      ? `\n>🛑 *Blocker:* ${r.blockers}`
-      : '';
+
+    let card = `👤 <@${r.userId}> — ${submittedDate}\n🎯 Working on: ${r.today || '—'}`;
+
+    // Only show blocker line if it's a real blocker
+    if (hasRealBlocker(r.blockers)) {
+      card += `\n🛑 Blocker: ${r.blockers}`;
+    }
 
     blocks.push({
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*${submittedDate}* — <@${r.userId}>\n>🎯 ${r.today || '—'}${blockerLine}`,
+        text: card,
       },
     });
   }
 
   blocks.push({ type: 'divider' });
 
-  // AI Summary
+  // AI Summary — short 2-3 sentences
   blocks.push({
     type: 'section',
     text: {
@@ -295,4 +252,4 @@ function setupHandlers(app, getResponses) {
   console.log('✅ Slash command handlers registered');
 }
 
-module.exports = { setupHandlers, buildReportBlocks, calculateHealthScore, buildUserStats };
+module.exports = { setupHandlers, buildReportBlocks, calculateHealthScore, getLatestPerUser };
