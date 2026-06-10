@@ -165,7 +165,8 @@ function setupHandlers(app) {
       // Extract values from the form submission using block_ids and action_ids
       const yesterday = view.state.values.yesterday_block.yesterday_input.value || '';
       const today = view.state.values.today_block.today_input.value || '';
-      const blockers = view.state.values.blockers_block.blockers_input.value || '';
+      const blockersRaw = view.state.values.blockers_block.blockers_input.value || '';
+      const blockers = blockersRaw.trim() ? blockersRaw.trim() : 'None';
 
       // Validate required fields — show error on field, keep modal open
       const errors = {};
