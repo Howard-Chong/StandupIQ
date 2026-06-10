@@ -158,13 +158,29 @@ function setupHandlers(app) {
   });
 
   // --- View submission handler ---
-  // Collects form data and stores the standup response
+  // Collects form data, validates required fields, and stores the response.
+  // Keeps the modal open if validation fails.
   app.view('standup_submission', async ({ ack, body, view, client }) => {
     try {
       // Extract values from the form submission using block_ids and action_ids
       const yesterday = view.state.values.yesterday_block.yesterday_input.value || '';
       const today = view.state.values.today_block.today_input.value || '';
       const blockers = view.state.values.blockers_block.blockers_input.value || '';
+
+      // Validate required fields — show error on field, keep modal open
+      const errors = {};
+      if (!yesterday.trim() || yesterday.trim().length < 5) {
+        errors.yesterday_block = 'Please enter at least 5 characters';
+      }
+      if (!today.trim() || today.trim().length < 5) {
+        errors.today_block = 'Please enter at least 5 characters';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        await ack({ response_action: 'errors', errors });
+        console.log(`⚠️  Standup form validation failed for @${body.user.username}`);
+        return;
+      }
 
       // Acknowledge the submission (closes the modal)
       await ack();
