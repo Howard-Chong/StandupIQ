@@ -1,8 +1,9 @@
 // src/commands.js — Slash command handlers
-// Registers the /standup-report command that provides a weekly summary,
-// blocker trends, and team health score based on collected standup data.
+// Registers /standup (opens the Block Kit form modal) and /standup-report
+// (weekly summary with blocker trends and team health score).
 
 const { getTeamStatus, generateSummary } = require('./digest');
+const { buildStandupForm } = require('../views/standupForm');
 
 /**
  * Calculates team health score as a percentage of responses without blockers.
@@ -211,6 +212,28 @@ function buildReportBlocks(responses) {
  * @param {Function} getResponses — Function that returns stored responses
  */
 function setupHandlers(app, getResponses) {
+  /**
+   * /standup — Opens the standup Block Kit modal directly.
+   * Slash commands provide a trigger_id, so the modal can be opened
+   * immediately without needing a button click first.
+   */
+  app.command('/standup', async ({ ack, body, client }) => {
+    try {
+      await ack();
+
+      const modal = buildStandupForm();
+
+      await client.views.open({
+        trigger_id: body.trigger_id,
+        view: modal,
+      });
+
+      console.log(`📋 /standup modal opened for <@${body.user_name}>`);
+    } catch (error) {
+      console.error('Error handling /standup command:', error.message);
+    }
+  });
+
   /**
    * /standup-report — Weekly summary of standup activity.
    * Shows team health score, blocker trends, individual stats,
