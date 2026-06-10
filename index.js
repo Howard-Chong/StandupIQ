@@ -15,6 +15,12 @@ const commands = require('./src/commands');
  */
 async function start() {
   try {
+    // Debug middleware — log every incoming event
+    app.use(async ({ payload, next }) => {
+      console.log(`🔔 Event received: ${payload.type} — command: ${payload.command || 'N/A'}`);
+      await next();
+    });
+
     // Register all event handlers before connecting
     standup.setupHandlers(app);
     commands.setupHandlers(app, standup.getResponses);
