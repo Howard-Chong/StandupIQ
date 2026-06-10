@@ -73,6 +73,7 @@ function buildStandupForm() {
       {
         type: 'input',
         block_id: 'blockers_block',
+        optional: true,
         label: {
           type: 'plain_text',
           text: 'Any blockers?',
@@ -82,7 +83,6 @@ function buildStandupForm() {
           type: 'plain_text_input',
           action_id: 'blockers_input',
           multiline: true,
-          optional: true,
           placeholder: {
             type: 'plain_text',
             text: 'Describe any blockers or challenges...',
