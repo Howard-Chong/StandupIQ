@@ -5,10 +5,11 @@
 const { app } = require('./src/bot');
 const schedule = require('./src/scheduler');
 const standup = require('./src/standup');
+const commands = require('./src/commands');
 
 /**
  * Starts the Bolt app in Socket Mode, registers all event handlers,
- * and starts the daily standup scheduler.
+ * slash commands, and starts the daily standup scheduler.
  * Socket Mode uses WebSocket — no HTTP server or public URL needed.
  * The scheduler fires at 9:00 AM server time every day.
  */
@@ -16,6 +17,7 @@ async function start() {
   try {
     // Register all event handlers before connecting
     standup.setupHandlers(app);
+    commands.setupHandlers(app, standup.getResponses);
 
     // Socket Mode: app.start() opens a WebSocket to Slack
     await app.start();
