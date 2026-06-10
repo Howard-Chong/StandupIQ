@@ -217,23 +217,23 @@ function setupHandlers(app, getResponses) {
    * Slash commands provide a trigger_id, so the modal can be opened
    * immediately without needing a button click first.
    */
-  app.command('/standup', async ({ ack, body, client }) => {
+  app.command('/standup', async ({ ack, command, client }) => {
     // Acknowledge immediately — Slack requires this within 3 seconds
     await ack();
-    console.log(`📥 /standup command received from @${body.user_name}`);
+    console.log(`📥 /standup command received:`, JSON.stringify(command, null, 2));
 
     try {
       const modal = buildStandupForm();
 
       const result = await client.views.open({
-        trigger_id: body.trigger_id,
+        trigger_id: command.trigger_id,
         view: modal,
       });
 
       console.log(`📋 /standup modal opened — view_id: ${result.view?.id}`);
     } catch (error) {
       console.error('Error opening standup modal:', error.message);
-      console.error('trigger_id:', body.trigger_id);
+      console.error('trigger_id used:', command.trigger_id);
     }
   });
 
