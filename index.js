@@ -1,21 +1,20 @@
 // index.js — Main entry point for StandupIQ
-// Starts the Slack Bolt app, the daily scheduler, and listens for incoming events.
+// Starts the Slack Bolt app (Socket Mode), the daily scheduler,
+// and handles incoming events via WebSocket.
 
 const { app } = require('./src/bot');
 const scheduler = require('./src/scheduler');
 
 /**
- * Starts the Bolt app server and the daily standup scheduler.
- * The port is configured via the PORT environment variable (defaults to 3000).
+ * Starts the Bolt app in Socket Mode and the daily standup scheduler.
+ * Socket Mode uses WebSocket — no HTTP server or public URL needed.
  * The scheduler fires at 9:00 AM server time every day.
- * On successful start, logs the port so we know the app is running.
  */
 async function start() {
   try {
-    const port = process.env.PORT || 3000;
-
-    await app.start(port);
-    console.log(`⚡ StandupIQ is running on port ${port}`);
+    // Socket Mode: app.start() opens a WebSocket to Slack
+    await app.start();
+    console.log('⚡ StandupIQ is running (Socket Mode)');
 
     // Start the daily 9 AM scheduler for standup collection
     scheduler.start();
