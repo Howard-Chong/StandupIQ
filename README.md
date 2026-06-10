@@ -13,11 +13,11 @@ using Real-Time Search API, and generating smart digests with Slack AI.
 - [x] Milestone 1: Project structure and bot initialization
 - [x] Milestone 2: Block Kit standup form
 - [x] Milestone 3: Daily scheduler (9:00 AM cron)
-- [ ] Milestone 4: Response collection and storage
-- [ ] Milestone 5: RTS API integration
-- [ ] Milestone 6: Slack AI digest generation
-- [ ] Milestone 7: `/standup-report` slash command
-- [ ] Milestone 8: End to end testing
+- [x] Milestone 4: Response collection and storage
+- [x] Milestone 5: RTS API integration
+- [x] Milestone 6: Slack AI digest generation
+- [x] Milestone 7: `/standup-report` slash command
+- [x] Milestone 8: End to end testing
 
 ---
 
