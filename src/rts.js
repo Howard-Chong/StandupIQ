@@ -19,6 +19,8 @@ const STOP_WORDS = new Set([
   'good', 'done', 'fixed', 'add', 'update', 'check', 'make', 'made',
   'need', 'needs', 'like', 'know', 'think', 'want', 'going', 'still',
   'try', 'trying', 'use', 'using', 'one', 'two', 'see', 'look',
+  'throwing', 'error', 'continue', 'progress', 'halt', 'making',
+  'getting', 'help', 'issue', 'problem',
 ]);
 
 /**
@@ -128,12 +130,13 @@ async function searchMessages(client, query) {
  * @returns {Promise<Object[]>} Array of flagged findings with keyword and message context
  */
 async function detectBlockers(client, responses) {
-  const findings = [];
-  const seenKeywords = new Set(); // avoid duplicate searches
+  const seenKeywords = new Set(); // avoid duplicate keyword searches
+  // Group findings by unique message (channelId + timestamp)
+  const findingMap = new Map();
 
   if (responses.length === 0) {
     console.log('🔍 RTS: No responses to scan');
-    return findings;
+    return [];
   }
 
   console.log(`🔍 RTS: Scanning ${responses.length} response(s) for hidden blockers...`);
@@ -155,7 +158,7 @@ async function detectBlockers(client, responses) {
       continue;
     }
 
-    // Search each keyword individually for targeted results
+    // Search each keyword individually
     for (const keyword of keywords) {
       if (seenKeywords.has(keyword)) {
         console.log(`🔍 RTS: Skipping duplicate keyword "${keyword}"`);
@@ -171,17 +174,52 @@ async function detectBlockers(client, responses) {
           console.log(`   📍 #${m.channelName}: "${m.text.substring(0, 80)}..."`);
         });
 
-        findings.push({
-          keyword,
-          triggeredBy: response.userId,
-          triggeredByName: response.userName,
-          matches,
-        });
+        // Group matches by message — merge keywords that hit the same message
+        for (const match of matches) {
+          const msgKey = `${match.channelId}:${match.timestamp}`;
+
+          if (findingMap.has(msgKey)) {
+            // Same message already flagged — add this keyword
+            const existing = findingMap.get(msgKey);
+            if (!existing.keywords.includes(keyword)) {
+              existing.keywords.push(keyword);
+            }
+          } else {
+            // New message — create a finding
+            findingMap.set(msgKey, {
+              keywords: [keyword],
+              triggeredBy: response.userId,
+              triggeredByName: response.userName,
+              channelId: match.channelId,
+              channelName: match.channelName,
+              text: match.text,
+              permalink: match.permalink,
+              timestamp: match.timestamp,
+            });
+          }
+        }
       }
     }
   }
 
-  console.log(`🔍 RTS: Scan complete — ${findings.length} finding(s)`);
+  // Convert map to findings array with the expected format
+  const findings = [];
+  for (const finding of findingMap.values()) {
+    findings.push({
+      keyword: finding.keywords.join(', '),
+      triggeredBy: finding.triggeredBy,
+      triggeredByName: finding.triggeredByName,
+      matches: [{
+        channelId: finding.channelId,
+        channelName: finding.channelName,
+        text: finding.text,
+        permalink: finding.permalink,
+        timestamp: finding.timestamp,
+      }],
+    });
+  }
+
+  console.log(`🔍 RTS: Scan complete — ${findings.length} finding(s) (${findingMap.size} grouped messages)`);
   return findings;
 }
 
