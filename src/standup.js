@@ -15,7 +15,7 @@ const store = require('./store');
  * @param {Object} entry — { userId, userName, yesterday, today, blockers }
  */
 function storeResponse(entry) {
-  store.storeResponse(entry);
+  return store.storeResponse(entry);
 }
 
 /**
@@ -186,24 +186,27 @@ function setupHandlers(app) {
       // Acknowledge the submission (closes the modal)
       await ack();
 
-      // Send a confirmation message to the user
-      try {
-        await client.chat.postMessage({
-          channel: body.user.id,
-          text: "Thanks! Your standup has been recorded. ✅",
-        });
-      } catch (dmError) {
-        console.error('Failed to send confirmation DM:', dmError.message);
-      }
-
-      // Store the response
-      storeResponse({
+      // Store the response (replaces same-day duplicate if exists)
+      const result = storeResponse({
         userId: body.user.id,
         userName: body.user.username || body.user.id,
         yesterday,
         today,
         blockers,
       });
+
+      // Send a confirmation message to the user
+      const confirmText = result.isUpdate
+        ? '✅ Your standup has been updated for today!'
+        : 'Thanks! Your standup has been recorded. ✅';
+      try {
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: confirmText,
+        });
+      } catch (dmError) {
+        console.error('Failed to send confirmation DM:', dmError.message);
+      }
 
       // Generate and post the digest to #standup-digest
       console.log('📊 Triggering digest generation...');

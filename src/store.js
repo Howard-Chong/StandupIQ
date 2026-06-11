@@ -39,9 +39,11 @@ function getResponses() {
 }
 
 /**
- * Stores a standup response by appending it to the JSON file.
+ * Stores a standup response. If the user already submitted today,
+ * replaces their previous entry instead of creating a duplicate.
  *
  * @param {Object} entry — { userId, userName, yesterday, today, blockers }
+ * @returns {{ isUpdate: boolean, total: number }} Whether it was an update
  */
 function storeResponse(entry) {
   try {
@@ -49,15 +51,36 @@ function storeResponse(entry) {
     const raw = fs.readFileSync(DATA_FILE, 'utf-8');
     const responses = JSON.parse(raw);
 
-    responses.push({
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    const newEntry = {
       ...entry,
-      submittedAt: new Date().toISOString(),
+      submittedAt: now.toISOString(),
+    };
+
+    // Check if same user already submitted today — replace if so
+    const existingIndex = responses.findIndex((r) => {
+      const entryDate = (r.submittedAt || '').slice(0, 10);
+      return r.userId === entry.userId && entryDate === today;
     });
 
+    let isUpdate = false;
+
+    if (existingIndex >= 0) {
+      responses[existingIndex] = newEntry;
+      isUpdate = true;
+      console.log(`📝 Standup response updated for <@${entry.userId}> — ${responses.length} total`);
+    } else {
+      responses.push(newEntry);
+      console.log(`📥 Standup response saved for <@${entry.userId}> — ${responses.length} total`);
+    }
+
     fs.writeFileSync(DATA_FILE, JSON.stringify(responses, null, 2), 'utf-8');
-    console.log(`📥 Standup response saved to file — ${responses.length} total`);
+    return { isUpdate, total: responses.length };
   } catch (error) {
     console.error('Error saving response:', error.message);
+    return { isUpdate: false, total: 0 };
   }
 }
 
