@@ -72,7 +72,9 @@ function generateSummary(responses) {
     .map((r) => r.today?.trim())
     .filter((t) => t)
     .map((t) => t.replace(/[.;!]$/, '').toLowerCase())
-    .map((t) => t.replace(/\s+today\s*$/i, '').trim()); // strip trailing "today"
+    .map((t) => t.replace(/\s+today\s*$/i, '').trim()) // strip trailing "today"
+    .map((t) => t.replace(/^today\s+/i, '').trim()) // strip leading "today"
+    .map((t) => t.replace(/^(i am |i will |i'll |will |working on |work on |work with )+/i, '').trim());
 
   let focusText = '';
   if (todayTasks.length === 1) {
