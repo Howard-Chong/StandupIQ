@@ -67,27 +67,41 @@ function generateSummary(responses) {
     return 'No standup responses were submitted.';
   }
 
-  const realBlockers = responses.filter((r) => hasRealBlocker(r.blockers));
-
-  // Sentence 1: Who submitted and overall state
-  const names = responses.map((r) => `<@${r.userId}>`).join(', ');
-  let summary = `${responses.length} update(s) from ${names}. `;
-
-  // Sentence 2: Work focus
-  const tasks = responses
+  // Build a natural work summary — clean up tasks, no semicolons
+  const todayTasks = responses
     .map((r) => r.today?.trim())
     .filter((t) => t)
-    .slice(0, 3); // just top 3 focus areas
+    .map((t) => t.replace(/[.;!]$/, '').toLowerCase())
+    .map((t) => t.replace(/\s+today\s*$/i, '').trim()); // strip trailing "today"
 
-  if (tasks.length > 0) {
-    summary += `Focus areas: ${tasks.join('; ')}. `;
+  let focusText = '';
+  if (todayTasks.length === 1) {
+    focusText = todayTasks[0];
+  } else if (todayTasks.length === 2) {
+    focusText = `${todayTasks[0]} and ${todayTasks[1]}`;
+  } else if (todayTasks.length > 2) {
+    focusText = todayTasks.slice(0, -1).join(', ') + `, and ${todayTasks[todayTasks.length - 1]}`;
   }
 
-  // Sentence 3: Blocker callout (only if any)
-  if (realBlockers.length > 0) {
-    summary += `${realBlockers.length} blocker(s) need attention.`;
+  // Sentence 1: What the team is focused on
+  let summary;
+  if (focusText) {
+    summary = `The team is focused on ${focusText}. `;
   } else {
-    summary += 'No blockers reported.';
+    const memberWord = responses.length === 1 ? '1 member' : `${responses.length} members`;
+    summary = `${memberWord} submitted updates. `;
+  }
+
+  // Sentence 2: Blocker status
+  const blockedCount = responses.filter((r) => hasRealBlocker(r.blockers)).length;
+
+  if (blockedCount === responses.length && blockedCount > 0) {
+    summary += 'The team needs immediate support.';
+  } else if (blockedCount > 0) {
+    const word = blockedCount === 1 ? '1 blocker needs' : `${blockedCount} blockers need`;
+    summary += `${word} attention.`;
+  } else {
+    summary += 'No blockers reported — the team is on track.';
   }
 
   return summary;
