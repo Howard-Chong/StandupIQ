@@ -142,8 +142,8 @@ async function detectBlockers(client, responses) {
   console.log(`🔍 RTS: Scanning ${responses.length} response(s) for hidden blockers...`);
 
   for (const response of responses) {
-    // Combine all text fields for keyword extraction
-    const allText = [response.today, response.yesterday, response.blockers]
+    // Extract keywords from today and blockers only (not yesterday — past work)
+    const allText = [response.today, response.blockers]
       .filter((t) => t && t.trim())
       .join(' ');
 
