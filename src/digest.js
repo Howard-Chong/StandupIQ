@@ -1,6 +1,8 @@
 // src/digest.js — AI-powered standup digest generation and posting
 // Takes collected standup responses and RTS findings, generates a
 // natural language team summary, and posts it to #standup-digest
+
+const rts = require('./rts');
 // with color-coded Block Kit formatting.
 
 /**
@@ -331,11 +333,18 @@ async function findDigestChannel(client) {
  */
 async function generateAndPost(app, responses, rtsFindings = []) {
   try {
-    console.log(`📊 generateAndPost called — ${responses.length} response(s), ${rtsFindings.length} RTS finding(s)`);
+    console.log(`📊 generateAndPost called — ${responses.length} response(s)`);
 
     if (responses.length === 0) {
       console.log('📊 No responses to generate digest from');
       return null;
+    }
+
+    // Run RTS blocker detection if no findings were passed in
+    if (rtsFindings.length === 0) {
+      console.log('🔍 Running RTS blocker detection...');
+      rtsFindings = await rts.detectBlockers(app.client, responses);
+      console.log(`🔍 RTS detection complete — ${rtsFindings.length} finding(s)`);
     }
 
     console.log(`📊 Generating digest from ${responses.length} response(s)...`);

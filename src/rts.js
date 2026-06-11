@@ -48,45 +48,74 @@ function extractKeywords(text) {
 }
 
 /**
- * Searches Slack for messages matching a given query using the
- * search.messages API. Returns relevant message excerpts.
+ * Searches recent Slack channel messages for a given keyword using
+ * conversations.history. Bot tokens can't use search.messages,
+ * so we scan channels the bot has access to instead.
  *
  * @param {Object} client — Slack Bolt app client
- * @param {string} query — Search query string
- * @returns {Promise<Object[]>} Array of search result objects
+ * @param {string} query — Search keyword
+ * @returns {Promise<Object[]>} Array of matching message objects
  */
 async function searchMessages(client, query) {
   try {
-    const result = await client.search.messages({
-      query,
-      sort: 'timestamp',
-      count: 5,
+    // Get list of channels the bot is in
+    const channelList = await client.conversations.list({
+      types: 'public_channel',
+      exclude_archived: true,
+      limit: 50,
     });
 
-    const matches = result.messages?.matches || [];
+    const channels = channelList.channels || [];
+    const channelNames = channels.map(c => `#${c.name}`).join(', ');
+    console.log(`   🔎 Scanning ${channels.length} channel(s) [${channelNames}] for "${query}"...`);
 
-    return matches.map((match) => ({
-      channelId: match.channel?.id || 'unknown',
-      channelName: match.channel?.name || 'unknown',
-      text: match.text || '',
-      permalink: match.permalink || '',
-      timestamp: match.ts || '',
-      userId: match.user || '',
-      username: match.username || 'unknown',
-    }));
+    const allMatches = [];
+    const lowerQuery = query.toLowerCase();
+
+    for (const channel of channels) {
+      try {
+        const history = await client.conversations.history({
+          channel: channel.id,
+          limit: 50,
+        });
+
+        for (const msg of history.messages || []) {
+          if (msg.subtype === 'bot_message' || msg.bot_id) continue;
+          const text = msg.text || '';
+          if (!text.trim()) continue;
+
+          if (text.toLowerCase().includes(lowerQuery)) {
+            allMatches.push({
+              channelId: channel.id,
+              channelName: channel.name || 'unknown',
+              text: text,
+              permalink: `https://slack.com/archives/${channel.id}/p${msg.ts.replace('.', '')}`,
+              timestamp: msg.ts || '',
+              userId: msg.user || '',
+              username: msg.user || 'unknown',
+            });
+          }
+        }
+      } catch (channelError) {
+        // Skip channels the bot can't read
+        continue;
+      }
+    }
+
+    console.log(`   ✅ Found ${allMatches.length} match(es)`);
+    return allMatches.slice(0, 5);
   } catch (error) {
-    // If search fails (e.g., missing scope), return empty array gracefully
-    console.error(`RTS search failed for query "${query}":`, error.message);
+    console.error(`❌ RTS search failed for "${query}": ${error.message}`);
     return [];
   }
 }
 
 /**
  * Detects potential hidden blockers by extracting keywords from
- * standup blocker responses and searching Slack channels for
- * related messages.
+ * all standup response fields (yesterday, today, blockers) and
+ * searching Slack channels for related messages.
  *
- * For each response that has blockers, extracts keywords and runs
+ * For each response, extracts keywords from all text fields and runs
  * a search. Returns any findings that may indicate unresolved issues.
  *
  * @param {Object} client — Slack Bolt app client
@@ -95,19 +124,27 @@ async function searchMessages(client, query) {
  */
 async function detectBlockers(client, responses) {
   const findings = [];
+  const seenKeywords = new Set(); // avoid duplicate searches
 
-  // Only process responses that have blockers
-  const responsesWithBlockers = responses.filter((r) => r.blockers && r.blockers.trim());
-
-  if (responsesWithBlockers.length === 0) {
-    console.log('🔍 RTS: No blockers to search for');
+  if (responses.length === 0) {
+    console.log('🔍 RTS: No responses to scan');
     return findings;
   }
 
-  console.log(`🔍 RTS: Scanning blockers from ${responsesWithBlockers.length} response(s)...`);
+  console.log(`🔍 RTS: Scanning ${responses.length} response(s) for hidden blockers...`);
 
-  for (const response of responsesWithBlockers) {
-    const keywords = extractKeywords(response.blockers);
+  for (const response of responses) {
+    // Combine all text fields for keyword extraction
+    const allText = [response.today, response.yesterday, response.blockers]
+      .filter((t) => t && t.trim())
+      .join(' ');
+
+    if (!allText.trim()) {
+      continue;
+    }
+
+    const keywords = extractKeywords(allText);
+    console.log(`🔍 RTS: @${response.userName} — keywords: [${keywords.join(', ')}]`);
 
     if (keywords.length === 0) {
       continue;
@@ -115,17 +152,26 @@ async function detectBlockers(client, responses) {
 
     // Search each keyword individually for targeted results
     for (const keyword of keywords) {
+      if (seenKeywords.has(keyword)) {
+        console.log(`🔍 RTS: Skipping duplicate keyword "${keyword}"`);
+        continue;
+      }
+      seenKeywords.add(keyword);
+
       const matches = await searchMessages(client, keyword);
+      console.log(`🔍 RTS: Keyword "${keyword}" — ${matches.length} match(es)`);
 
       if (matches.length > 0) {
+        matches.forEach((m) => {
+          console.log(`   📍 #${m.channelName}: "${m.text.substring(0, 80)}..."`);
+        });
+
         findings.push({
           keyword,
           triggeredBy: response.userId,
           triggeredByName: response.userName,
           matches,
         });
-
-        console.log(`🔍 RTS: Keyword "${keyword}" returned ${matches.length} match(es)`);
       }
     }
   }
