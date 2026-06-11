@@ -131,8 +131,8 @@ async function searchMessages(client, query) {
  */
 async function detectBlockers(client, responses) {
   const seenKeywords = new Set(); // avoid duplicate keyword searches
-  // Group findings by unique message (channelId + timestamp)
-  const findingMap = new Map();
+  // Group findings by keyword — one entry per keyword, multiple matches
+  const keywordMap = new Map();
 
   if (responses.length === 0) {
     console.log('🔍 RTS: No responses to scan');
@@ -174,52 +174,19 @@ async function detectBlockers(client, responses) {
           console.log(`   📍 #${m.channelName}: "${m.text.substring(0, 80)}..."`);
         });
 
-        // Group matches by message — merge keywords that hit the same message
-        for (const match of matches) {
-          const msgKey = `${match.channelId}:${match.timestamp}`;
-
-          if (findingMap.has(msgKey)) {
-            // Same message already flagged — add this keyword
-            const existing = findingMap.get(msgKey);
-            if (!existing.keywords.includes(keyword)) {
-              existing.keywords.push(keyword);
-            }
-          } else {
-            // New message — create a finding
-            findingMap.set(msgKey, {
-              keywords: [keyword],
-              triggeredBy: response.userId,
-              triggeredByName: response.userName,
-              channelId: match.channelId,
-              channelName: match.channelName,
-              text: match.text,
-              permalink: match.permalink,
-              timestamp: match.timestamp,
-            });
-          }
-        }
+        // Create one entry per keyword with all matching messages
+        keywordMap.set(keyword, {
+          keyword,
+          triggeredBy: response.userId,
+          triggeredByName: response.userName,
+          matches,
+        });
       }
     }
   }
 
-  // Convert map to findings array with the expected format
-  const findings = [];
-  for (const finding of findingMap.values()) {
-    findings.push({
-      keyword: finding.keywords.join(', '),
-      triggeredBy: finding.triggeredBy,
-      triggeredByName: finding.triggeredByName,
-      matches: [{
-        channelId: finding.channelId,
-        channelName: finding.channelName,
-        text: finding.text,
-        permalink: finding.permalink,
-        timestamp: finding.timestamp,
-      }],
-    });
-  }
-
-  console.log(`🔍 RTS: Scan complete — ${findings.length} finding(s) (${findingMap.size} grouped messages)`);
+  const findings = Array.from(keywordMap.values());
+  console.log(`🔍 RTS: Scan complete — ${findings.length} finding(s)`);
   return findings;
 }
 
