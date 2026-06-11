@@ -14,6 +14,11 @@ const STOP_WORDS = new Set([
   'doing', 'get', 'got', 'here', 'how', 'into', 'out', 'over', 'some',
   'there', 'up', 'what', 'when', 'which', 'who', 'all', 'any', 'more',
   'most', 'other', 'only', 'own', 'same',
+  // Noise words — common in standups but not useful for RTS
+  'test', 'work', 'working', 'today', 'yesterday', 'just', 'new',
+  'good', 'done', 'fixed', 'add', 'update', 'check', 'make', 'made',
+  'need', 'needs', 'like', 'know', 'think', 'want', 'going', 'still',
+  'try', 'trying', 'use', 'using', 'one', 'two', 'see', 'look',
 ]);
 
 /**

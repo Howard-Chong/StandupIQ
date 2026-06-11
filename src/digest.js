@@ -232,18 +232,28 @@ async function postDigest(app, digestData, channelId) {
 
     if (rtsFindings.length > 0) {
       for (const finding of rtsFindings) {
-        const channelMentions = finding.matches
-          .map((m) => `<#${m.channelId}>`)
-          .filter((v, i, a) => a.indexOf(v) === i) // unique channels
-          .join(', ');
-
+        // Header line for the keyword flag
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `🔑 *"${finding.keyword}"* flagged by <@${finding.triggeredBy}> — found ${finding.matches.length} match(es) in ${channelMentions}`,
+            text: `🔑 *"${finding.keyword}"* flagged by <@${finding.triggeredBy}>`,
           },
         });
+
+        // Show each matching message with channel and text
+        for (const match of finding.matches.slice(0, 3)) {
+          const preview = match.text.length > 100
+            ? match.text.substring(0, 100) + '...'
+            : match.text;
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `>Found in <#${match.channelId}>: "${preview}"`,
+            },
+          });
+        }
       }
     } else {
       blocks.push({
